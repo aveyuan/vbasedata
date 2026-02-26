@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"time"
 
-	"github.com/mojocn/base64Captcha"
+	"github.com/aveyuan/base64Captcha"
 )
 
 type CaptchaConfig struct {
@@ -32,7 +32,7 @@ func NewCaptcha(c *CaptchaConfig, stor base64Captcha.Store) *Captcha {
 	}
 
 	if len(c.Fonts) == 0 {
-		c.Fonts = append(c.Fonts, "wqy-microhei.ttc")
+		c.Fonts = append(c.Fonts, "actionj.ttf")
 	}
 
 	if c.BgColor == nil {

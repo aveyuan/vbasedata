@@ -1,15 +1,17 @@
 module github.com/aveyuan/vbasedata
 
-go 1.23.6
+go 1.24
+
+toolchain go1.24.13
 
 require (
 	github.com/alitto/pond v1.9.2
+	github.com/aveyuan/base64Captcha v0.0.2
 	github.com/aveyuan/vlogger v0.0.1
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-kratos/kratos/v2 v2.8.4
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
-	github.com/mojocn/base64Captcha v1.3.8
 	github.com/redis/go-redis/v9 v9.12.1
 	github.com/segmentio/kafka-go v0.4.49
 	github.com/yitter/idgenerator-go v1.3.3
