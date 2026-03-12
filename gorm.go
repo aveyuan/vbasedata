@@ -127,7 +127,7 @@ type GormConfig struct {
 	Username  string     `yaml:"username" json:"username"` // 数据库用户名
 	Password  string     `yaml:"password" json:"password"` // 数据库密码
 	Address   string     `yaml:"address" json:"address"`   // 数据库地址
-	DBName    string     `yaml:"db_name" json:"db_name"`   // 数据库名称
+	DBName    string     `yaml:"dbname" json:"dbname"`     // 数据库名称
 	SSLMode   string     `yaml:"sslmode" json:"sslmode"`
 	TimeZone  string     `yaml:"timezone" json:"timezone"`
 	Logconfig *Logconfig `yaml:"logconfig" json:"logconfig"` // 日志配置
@@ -208,7 +208,8 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 	var db *gorm.DB
 	var err error
 
-	if c.Type == "mysql" {
+	switch c.Type {
+	case "mysql":
 		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", c.Username, c.Password, c.Address, c.DBName)
 		db, err = gorm.Open(mysql.New(mysql.Config{
 			DSN:                       dsn,
@@ -236,7 +237,7 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 				return nil, nil, err
 			}
 		}
-	} else if c.Type == "pg" {
+	case "pg":
 		sslmode := c.SSLMode
 		if sslmode == "" {
 			sslmode = "disable"
@@ -274,7 +275,7 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 				return nil, nil, err
 			}
 		}
-	} else {
+	default:
 		db, err = gorm.Open(sqlite.Open(c.DBPath), glog)
 		if err != nil {
 			return nil, nil, err
