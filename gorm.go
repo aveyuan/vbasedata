@@ -237,7 +237,7 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 				return nil, nil, err
 			}
 		}
-	case "pg":
+	case "pg", "postgres":
 		sslmode := c.SSLMode
 		if sslmode == "" {
 			sslmode = "disable"
