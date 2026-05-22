@@ -128,6 +128,7 @@ type GormConfig struct {
 	DBName    string     `yaml:"dbname" json:"dbname"`     // 数据库名称
 	SSLMode   string     `yaml:"sslmode" json:"sslmode"`
 	TimeZone  string     `yaml:"timezone" json:"timezone"`
+	Timeout   int        `yaml:"timeout" json:"timeout"`     // SQLite busy timeout，单位毫秒
 	Logconfig *Logconfig `yaml:"logconfig" json:"logconfig"` // 日志配置
 	Conns     *Conns     `yaml:"conns" json:"conns"`         // 连接池配置
 }
@@ -296,12 +297,17 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 		}
 	}
 
-	// SetMaxIdleConns 用于设置连接池中空闲连接的最大数量。
-	sqlDB.SetMaxIdleConns(c.Conns.Maxidle)
-	// SetMaxOpenConns 设置打开数据库连接的最大数量。
-	sqlDB.SetMaxOpenConns(c.Conns.Maxopen)
-	// SetConnMaxLifetime 设置了连接可复用的最大时间。
-	sqlDB.SetConnMaxLifetime(time.Second * time.Duration(c.Conns.Maxlifetime))
+	if c.Type == "sqlite" {
+		sqlDB.SetMaxOpenConns(1)
+	} else {
+		// SetMaxIdleConns 用于设置连接池中空闲连接的最大数量。
+		sqlDB.SetMaxIdleConns(c.Conns.Maxidle)
+		// SetMaxOpenConns 设置打开数据库连接的最大数量。
+		sqlDB.SetMaxOpenConns(c.Conns.Maxopen)
+		// SetConnMaxLifetime 设置了连接可复用的最大时间。
+		sqlDB.SetConnMaxLifetime(time.Second * time.Duration(c.Conns.Maxlifetime))
+	}
+
 	theF := func() {
 		logger.Infof("DB 连接池关闭-%v", c.DBName)
 		if err := sqlDB.Close(); err != nil {
