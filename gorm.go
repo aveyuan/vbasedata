@@ -12,8 +12,6 @@ import (
 	pgconn "github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/aveyuan/vlogger"
-
-	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -276,10 +274,7 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 			}
 		}
 	default:
-		db, err = gorm.Open(sqlite.Open(c.DBPath), glog)
-		if err != nil {
-			return nil, nil, err
-		}
+		db, err = openSQLite(c.DBPath, glog)
 	}
 
 	sqlDB, err := db.DB()
@@ -291,11 +286,12 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 		logger.Errorf("DB:%v PING错误,%v", c.DBName, err)
 		return nil, nil, err
 	} else {
-		if c.Type == "mysql" {
+		switch c.Type {
+		case "mysql":
 			logger.Infof("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName))
-		} else if c.Type == "pg" {
+		case "pg", "postgres":
 			logger.Infof("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName))
-		} else {
+		default:
 			logger.Infof("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath))
 		}
 	}
