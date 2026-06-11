@@ -8,7 +8,6 @@ require (
 	github.com/alitto/pond v1.9.2
 	github.com/aveyuan/base64Captcha v0.0.2
 	github.com/glebarez/sqlite v1.11.0
-	github.com/go-kratos/kratos/v2 v2.8.4
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jackc/pgx/v5 v5.6.0

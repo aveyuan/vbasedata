@@ -3,9 +3,10 @@ package vbasedata
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/go-kratos/kratos/v2/log"
 	redis "github.com/redis/go-redis/v9"
 )
 
@@ -24,12 +25,12 @@ type RedisConfig struct {
 }
 
 // NewRedis redis连接
-func NewRedis(c *RedisConfig, logger *log.Helper) (redis.UniversalClient, func(), error) {
+func NewRedis(c *RedisConfig, logger *slog.Logger) (redis.UniversalClient, func(), error) {
 	if c == nil {
 		return nil, nil, errors.New("redis配置参数不能为空")
 	}
 
-	logger.Infof("redis配置%+v", c.Addr)
+	logger.Info(fmt.Sprintf("redis配置%+v", c.Addr))
 	//逗号分割，兼容单点和集群两种模式。
 	rdb := redis.NewUniversalClient(&redis.UniversalOptions{
 		PoolSize:         c.PoolSize, //连接池最大
@@ -48,11 +49,11 @@ func NewRedis(c *RedisConfig, logger *log.Helper) (redis.UniversalClient, func()
 	if err != nil {
 		return nil, nil, err
 	}
-	logger.Infof("redis ping 情况：%v", pong)
+	logger.Info(fmt.Sprintf("redis ping 情况：%v", pong))
 	f := func() {
 		logger.Info("Redis 连接池关闭")
 		if err := rdb.Close(); err != nil {
-			logger.Errorf("Redis 连接池关闭失败 %v", err)
+			logger.Error(fmt.Sprintf("Redis 连接池关闭失败 %v", err))
 		}
 	}
 	return rdb, f, nil

@@ -1,10 +1,11 @@
 package vbasedata
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/alitto/pond"
-	"github.com/go-kratos/kratos/v2/log"
 )
 
 type PondConfig struct {
@@ -19,7 +20,7 @@ type Pond struct {
 	stopAndWait int
 }
 
-func NewPond(c *PondConfig, log *log.Helper) *Pond {
+func NewPond(c *PondConfig, log *slog.Logger) *Pond {
 	if c.MinWorkers == 0 {
 		c.MinWorkers = 2
 	}
@@ -34,7 +35,7 @@ func NewPond(c *PondConfig, log *log.Helper) *Pond {
 
 	return &Pond{
 		pond: pond.New(c.MaxWorkers, c.MaxCapacity, pond.MinWorkers(c.MinWorkers), pond.PanicHandler(func(i interface{}) {
-			log.Errorf("当前Pond运行的任务异常退出:%v", i)
+			log.Error(fmt.Sprintf("当前Pond运行的任务异常退出:%v", i))
 		})),
 		stopAndWait: c.StopAndWait,
 	}
