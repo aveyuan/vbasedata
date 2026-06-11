@@ -1,8 +1,6 @@
 module github.com/aveyuan/vbasedata
 
-go 1.24
-
-toolchain go1.24.13
+go 1.25.0
 
 require (
 	github.com/alitto/pond v1.9.2
@@ -11,8 +9,8 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jackc/pgx/v5 v5.6.0
-	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
 	github.com/redis/go-redis/v9 v9.12.1
+	github.com/wneessen/go-mail v0.7.3
 	github.com/yitter/idgenerator-go v1.3.3
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
@@ -36,9 +34,9 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/image v0.23.0 // indirect
-	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect

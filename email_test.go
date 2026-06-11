@@ -12,7 +12,7 @@ func TestMail(t *testing.T) {
 		Port:     "465",
 		Form:     "test<0000@qq.com>",
 		Tls:      true,
-	})
+	}, nil)
 	if err := e.SendMsg(&Msg{
 		Title:    "test",
 		Body:     "this is test",

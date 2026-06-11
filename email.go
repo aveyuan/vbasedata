@@ -1,11 +1,10 @@
 package vbasedata
 
 import (
-	"crypto/tls"
 	"fmt"
-	"net/smtp"
+	"log/slog"
 
-	"github.com/jordan-wright/email"
+	"github.com/wneessen/go-mail"
 )
 
 type EmailConfig struct {
@@ -25,14 +24,19 @@ const (
 )
 
 type Email struct {
-	e *email.Email
+	e *mail.Msg
 	c *EmailConfig
+	slog *slog.Logger
 }
 
-func NewEmail(c *EmailConfig) *Email {
+func NewEmail(c *EmailConfig, log *slog.Logger) *Email {
+	if log == nil {
+		log = slog.Default()
+	}
 	return &Email{
-		e: email.NewEmail(),
+		e: mail.NewMsg(),
 		c: c,
+		slog: log,
 	}
 }
 
@@ -44,24 +48,31 @@ type Msg struct {
 }
 
 func (t *Email) SendMsg(msg *Msg) error {
-	t.e.From = t.c.Form
-	t.e.To = []string{msg.To}
-	t.e.Subject = msg.Title
-	if msg.BodyType == TextBodyType {
-		t.e.Text = []byte(msg.Body)
+if err := t.e.From(t.c.Form); err != nil {
+		t.slog.Error("failed to set From address", "error", err)
+		return err
 	}
+	if err := t.e.To(msg.To); err != nil {
+		t.slog.Error("failed to set To address", "error", err)
+		return err
+	}
+
+	txt := mail.TypeTextPlain
 	if msg.BodyType == HtmlBodyType {
-		t.e.HTML = []byte(msg.Body)
+		txt = mail.TypeTextHTML
+	}
+	t.e.Subject("This is my first mail with go-mail!")
+	t.e.SetBodyString(txt, msg.Body)
+	client, err := mail.NewClient(fmt.Sprintf("%v:%v", t.c.Host, t.c.Port), mail.WithSMTPAuth(mail.SMTPAuthAutoDiscover),
+		mail.WithUsername(t.c.Username), mail.WithPassword(t.c.Password))
+	if err != nil {
+		t.slog.Error("failed to create mail client", "error", err)
+		return err
+	}
+	if err := client.DialAndSend(t.e); err != nil {
+		t.slog.Error("failed to send mail", "error", err)
+		return err
 	}
 
-	if t.c.Tls {
-		return t.e.SendWithTLS(fmt.Sprintf("%v:%v", t.c.Host, t.c.Port), smtp.PlainAuth("", t.c.Username, t.c.Password, t.c.Host), &tls.Config{
-			ServerName:         t.c.Host,
-			InsecureSkipVerify: false,
-		})
-
-	}
-
-	return t.e.Send(fmt.Sprintf("%v:%v", t.c.Host, t.c.Port), smtp.PlainAuth("", t.c.Username, t.c.Password, t.c.Host))
-
+	return  nil
 }
