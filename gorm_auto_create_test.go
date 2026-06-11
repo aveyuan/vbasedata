@@ -2,20 +2,16 @@ package vbasedata
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/go-kratos/kratos/v2/log"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-func newTestLogger() *log.Helper {
-	l := log.NewStdLogger(os.Stdout)
-	return log.NewHelper(l)
-}
 
 func TestNewGorm_MySQL_AutoCreateDatabase(t *testing.T) {
 	addr := os.Getenv("VB_TEST_MYSQL_ADDR")
@@ -40,7 +36,7 @@ func TestNewGorm_MySQL_AutoCreateDatabase(t *testing.T) {
 		Password: pass,
 		Address:  addr,
 		DBName:   dbName,
-	}, newTestLogger())
+	}, &slog.Logger{})
 	if err != nil {
 		t.Fatalf("NewGorm mysql: %v", err)
 	}
@@ -103,7 +99,7 @@ func TestNewGorm_PG_AutoCreateDatabase(t *testing.T) {
 		DBName:   dbName,
 		SSLMode:  sslmode,
 		TimeZone: tz,
-	}, newTestLogger())
+	}, &slog.Logger{})
 	if err != nil {
 		t.Fatalf("NewGorm pg: %v", err)
 	}

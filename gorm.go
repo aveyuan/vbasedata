@@ -3,21 +3,20 @@ package vbasedata
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/go-kratos/kratos/v2/log"
 	mysqldriver "github.com/go-sql-driver/mysql"
 	pgconn "github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/aveyuan/vlogger"
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	glogger "gorm.io/gorm/logger"
-	"gorm.io/gorm/schema"
 )
 
 func systemTimeZoneName() string {
@@ -138,6 +137,7 @@ type Logconfig struct {
 	SlowThreshold             int    `yaml:"slow_threshold" json:"slow_threshold"`                               // 慢 SQL 阈值 单位：毫秒
 	IgnoreRecordNotFoundError bool   `yaml:"ignore_record_not_found_error" json:"ignore_record_not_found_error"` // 忽略ErrRecordNotFound（记录未找到）错误
 	Colorful                  bool   `yaml:"colorful" json:"colorful"`                                           // 是否彩色打印
+	ParameterizedQueries      bool   `yaml:"parameterized_queries" json:"parameterized_queries"`
 	Level                     string `yaml:"level" json:"level"`
 }
 
@@ -149,7 +149,7 @@ type Conns struct {
 }
 
 // NewGorm 初始化一个gorm的客户端
-func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
+func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 	if c == nil {
 		return nil, nil, errors.New("GORM配置参数不能为空")
 	}
@@ -185,23 +185,13 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 		c.DBPath = "data.db"
 	}
 
-	// 设置日志级别
-	l, ok := vlogger.LogStr2Level[c.Logconfig.Level]
-	if !ok {
-		l = -1
-	}
-
 	glog := &gorm.Config{
-		// 改写日志
-		Logger: vlogger.NewGormLog(logger, vlogger.Config{
-			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold) * time.Millisecond, // 慢 SQL 阈值
-			LogLevel:                  glogger.LogLevel(l),                                         // 日志级别
-			IgnoreRecordNotFoundError: c.Logconfig.IgnoreRecordNotFoundError,                       // 忽略ErrRecordNotFound（记录未找到）错误
-			Colorful:                  c.Logconfig.Colorful,                                        // 彩色打印，zap下警用
+		Logger: logger.NewSlogLogger(slog, glogger.Config{
+			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold),
+			Colorful:                  c.Logconfig.Colorful,
+			IgnoreRecordNotFoundError: c.Logconfig.IgnoreRecordNotFoundError,
+			ParameterizedQueries:      c.Logconfig.ParameterizedQueries,
 		}),
-		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true, //单数表
-		},
 	}
 
 	var db *gorm.DB
@@ -284,16 +274,16 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 	}
 
 	if err := sqlDB.Ping(); err != nil {
-		logger.Errorf("DB:%v PING错误,%v", c.DBName, err)
+		slog.Error(fmt.Sprintf("DB:%v PING错误,%v", c.DBName, err))
 		return nil, nil, err
 	} else {
 		switch c.Type {
 		case "mysql":
-			logger.Infof("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName))
+			slog.Error(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName)))
 		case "pg", "postgres":
-			logger.Infof("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName))
+			slog.Error(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName)))
 		default:
-			logger.Infof("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath))
+			slog.Error(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath)))
 		}
 	}
 
@@ -304,9 +294,9 @@ func NewGorm(c *GormConfig, logger *log.Helper) (*gorm.DB, func(), error) {
 	// SetConnMaxLifetime 设置了连接可复用的最大时间。
 	sqlDB.SetConnMaxLifetime(time.Second * time.Duration(c.Conns.Maxlifetime))
 	theF := func() {
-		logger.Infof("DB 连接池关闭-%v", c.DBName)
+		slog.Info(fmt.Sprintf("DB 连接池关闭-%v", c.DBName))
 		if err := sqlDB.Close(); err != nil {
-			logger.Errorf("DB 连接池关闭失败-%v", c.DBName)
+			slog.Error(fmt.Sprintf("DB 连接池关闭失败-%v", c.DBName))
 		}
 	}
 	return db, theF, nil
