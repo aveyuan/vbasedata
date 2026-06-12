@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	glogger "gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 func systemTimeZoneName() string {
@@ -39,19 +40,19 @@ func systemTimeZoneName() string {
 	return "UTC"
 }
 
-// parseLogLevel 将配置中的字符串日志级别转换为 gorm logger.LogLevel，默认 info
-func parseLogLevel(level string) glogger.LogLevel {
+// parseLogLevel 将配置中的字符串日志级别转换为 gorm logger.LogLevel，默认 warn。
+func parseLogLevel(level string) logger.LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "silent":
-		return glogger.Silent
+		return logger.Silent
 	case "warn":
-		return glogger.Warn
+		return logger.Warn
 	case "error":
-		return glogger.Error
+		return logger.Error
 	case "info", "debug":
-		return glogger.Info
+		return logger.Info
 	default:
-		return glogger.Info
+		return logger.Warn
 	}
 }
 
@@ -79,9 +80,34 @@ func quotePGIdent(s string) string {
 	return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
 }
 
+func buildMySQLDSN(c *GormConfig, dbName string) string {
+	return (&mysqldriver.Config{
+		User:      c.Username,
+		Passwd:    c.Password,
+		Net:       "tcp",
+		Addr:      c.Address,
+		DBName:    dbName,
+		ParseTime: true,
+		Loc:       time.Local,
+		Params: map[string]string{
+			"charset": "utf8mb4",
+		},
+	}).FormatDSN()
+}
+
+func newMySQLDialector(c *GormConfig, dbName string) gorm.Dialector {
+	return mysql.New(mysql.Config{
+		DSN:                       buildMySQLDSN(c, dbName),
+		DefaultStringSize:         256,
+		DisableDatetimePrecision:  true,
+		DontSupportRenameIndex:    true,
+		DontSupportRenameColumn:   true,
+		SkipInitializeWithVersion: false,
+	})
+}
+
 func ensureMySQLDatabase(c *GormConfig, glog *gorm.Config) error {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/?charset=utf8mb4&parseTime=True&loc=Local", c.Username, c.Password, c.Address)
-	adminDB, err := gorm.Open(mysql.New(mysql.Config{DSN: dsn}), glog)
+	adminDB, err := gorm.Open(newMySQLDialector(c, ""), glog)
 	if err != nil {
 		return err
 	}
@@ -106,6 +132,33 @@ func buildPGDsn(host, port, username, password, dbname, sslmode, tz string) stri
 		return base
 	}
 	return base + fmt.Sprintf(" TimeZone=%s", tz)
+}
+
+func normalizePostgresOptions(c *GormConfig) (host, port, sslmode, tz string) {
+	host = c.Address
+	port = "5432"
+	if h, p, err := net.SplitHostPort(c.Address); err == nil {
+		host = h
+		if p != "" {
+			port = p
+		}
+	} else if h, p, ok := strings.Cut(c.Address, ":"); ok {
+		host = h
+		if p != "" {
+			port = p
+		}
+	}
+
+	sslmode = strings.TrimSpace(c.SSLMode)
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
+	tz = strings.TrimSpace(c.TimeZone)
+	if tz == "" || strings.EqualFold(tz, "local") {
+		tz = systemTimeZoneName()
+	}
+	return host, port, sslmode, tz
 }
 
 func ensurePGDatabase(c *GormConfig, glog *gorm.Config, host, port, sslmode, tz string) error {
@@ -164,7 +217,141 @@ type Conns struct {
 	Maxlifetime int `yaml:"maxlifetime" json:"maxlifetime"` // 连接最大存活时间 单位：秒
 }
 
-// NewGorm 初始化一个gorm的客户端
+func defaultLogConfig(conf *Logconfig) Logconfig {
+	defaults := Logconfig{
+		SlowThreshold:             3000,
+		IgnoreRecordNotFoundError: true,
+	}
+	if conf == nil {
+		return defaults
+	}
+	defaults.Colorful = conf.Colorful
+	defaults.ParameterizedQueries = conf.ParameterizedQueries
+	defaults.Level = conf.Level
+	defaults.IgnoreRecordNotFoundError = conf.IgnoreRecordNotFoundError
+	if conf.SlowThreshold > 0 {
+		defaults.SlowThreshold = conf.SlowThreshold
+	}
+	return defaults
+}
+
+func defaultConns(conf *Conns) Conns {
+	defaults := Conns{
+		Maxidle:     5,
+		Maxopen:     10,
+		Maxlifetime: 1800,
+	}
+	if conf == nil {
+		return defaults
+	}
+	if conf.Maxidle > 0 {
+		defaults.Maxidle = conf.Maxidle
+	}
+	if conf.Maxopen > 0 {
+		defaults.Maxopen = conf.Maxopen
+	}
+	if conf.Maxlifetime > 0 {
+		defaults.Maxlifetime = conf.Maxlifetime
+	}
+	return defaults
+}
+
+func normalizeGormConfig(c *GormConfig) GormConfig {
+	cfg := *c
+	logConfig := defaultLogConfig(c.Logconfig)
+	conns := defaultConns(c.Conns)
+	cfg.Type = strings.ToLower(strings.TrimSpace(c.Type))
+	cfg.DBPath = strings.TrimSpace(c.DBPath)
+	if cfg.DBPath == "" {
+		cfg.DBPath = "data.db"
+	}
+	cfg.Logconfig = &logConfig
+	cfg.Conns = &conns
+	return cfg
+}
+
+func applyNormalizedGormConfig(dst *GormConfig, src *GormConfig) {
+	dst.Type = src.Type
+	dst.DBPath = src.DBPath
+	dst.Logconfig = src.Logconfig
+	dst.Conns = src.Conns
+}
+
+func newGormConfig(c *GormConfig, log *slog.Logger) *gorm.Config {
+	glog := &gorm.Config{
+		Logger: logger.NewSlogLogger(log, logger.Config{
+			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold) * time.Millisecond,
+			Colorful:                  c.Logconfig.Colorful,
+			IgnoreRecordNotFoundError: c.Logconfig.IgnoreRecordNotFoundError,
+			ParameterizedQueries:      c.Logconfig.ParameterizedQueries,
+			LogLevel:                  parseLogLevel(c.Logconfig.Level),
+		}),
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true,
+		},
+	}
+	return glog
+}
+
+func openGormDB(c *GormConfig, glog *gorm.Config) (*gorm.DB, error) {
+	switch c.Type {
+	case "mysql":
+		db, err := gorm.Open(newMySQLDialector(c, c.DBName), glog)
+		if err != nil {
+			if isMySQLUnknownDatabaseErr(err) {
+				if err2 := ensureMySQLDatabase(c, glog); err2 != nil {
+					return nil, err2
+				}
+				db, err = gorm.Open(newMySQLDialector(c, c.DBName), glog)
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		return db, nil
+	case "pg", "postgres":
+		host, port, sslmode, tz := normalizePostgresOptions(c)
+		dsn := buildPGDsn(host, port, c.Username, c.Password, c.DBName, sslmode, tz)
+		db, err := gorm.Open(postgres.Open(dsn), glog)
+		if err != nil {
+			if isPGDatabaseDoesNotExistErr(err) {
+				if err2 := ensurePGDatabase(c, glog, host, port, sslmode, tz); err2 != nil {
+					return nil, err2
+				}
+				db, err = gorm.Open(postgres.Open(dsn), glog)
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		return db, nil
+	default:
+		return gorm.Open(sqlite.Open(c.DBPath), glog)
+	}
+}
+
+func logDBConnected(log *slog.Logger, c *GormConfig) {
+	switch c.Type {
+	case "mysql":
+		log.Info(fmt.Sprintf("数据库配置:%s:******@tcp(%s)/%s?charset=utf8mb4&parseTime=true&loc=Local 连接成功", c.Username, c.Address, c.DBName))
+	case "pg", "postgres":
+		log.Info(fmt.Sprintf("数据库配置:%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName))
+	default:
+		log.Info(fmt.Sprintf("数据库配置:%s:连接成功", c.DBPath))
+	}
+}
+
+func applyConnPool(sqlDB interface {
+	SetMaxIdleConns(int)
+	SetMaxOpenConns(int)
+	SetConnMaxLifetime(time.Duration)
+}, conns *Conns) {
+	sqlDB.SetMaxIdleConns(conns.Maxidle)
+	sqlDB.SetMaxOpenConns(conns.Maxopen)
+	sqlDB.SetConnMaxLifetime(time.Second * time.Duration(conns.Maxlifetime))
+}
+
+// NewGorm 初始化一个 gorm 客户端。
 func NewGorm(c *GormConfig, log *slog.Logger) (*gorm.DB, func(), error) {
 	if c == nil {
 		return nil, nil, errors.New("GORM配置参数不能为空")
@@ -172,120 +359,14 @@ func NewGorm(c *GormConfig, log *slog.Logger) (*gorm.DB, func(), error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	//默认配置
-	if c.Logconfig == nil {
-		c.Logconfig = &Logconfig{
-			SlowThreshold:             3000,
-			IgnoreRecordNotFoundError: true,
-		}
-	}
-	if c.Logconfig.SlowThreshold == 0 {
-		c.Logconfig.SlowThreshold = 3000
-	}
-	//默认配置
-	if c.Conns == nil {
-		c.Conns = &Conns{
-			Maxidle:     5,
-			Maxopen:     10,
-			Maxlifetime: 1800,
-		}
-	}
-	if c.Conns.Maxidle == 0 {
-		c.Conns.Maxidle = 5
-	}
-	if c.Conns.Maxopen == 0 {
-		c.Conns.Maxopen = 10
-	}
-	if c.Conns.Maxlifetime == 0 {
-		c.Conns.Maxlifetime = 1800
-	}
 
-	if c.DBPath == "" {
-		c.DBPath = "data.db"
-	}
+	cfg := normalizeGormConfig(c)
+	applyNormalizedGormConfig(c, &cfg)
+	glog := newGormConfig(&cfg, log)
 
-	glog := &gorm.Config{
-		Logger: logger.NewSlogLogger(log, glogger.Config{
-			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold) * time.Millisecond,
-			Colorful:                  c.Logconfig.Colorful,
-			IgnoreRecordNotFoundError: c.Logconfig.IgnoreRecordNotFoundError,
-			ParameterizedQueries:      c.Logconfig.ParameterizedQueries,
-			LogLevel:                  parseLogLevel(c.Logconfig.Level),
-		}),
-	}
-
-	var db *gorm.DB
-	var err error
-
-	switch c.Type {
-	case "mysql":
-		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", c.Username, c.Password, c.Address, c.DBName)
-		db, err = gorm.Open(mysql.New(mysql.Config{
-			DSN:                       dsn,
-			DefaultStringSize:         256,
-			DisableDatetimePrecision:  true,
-			DontSupportRenameIndex:    true,
-			DontSupportRenameColumn:   true,
-			SkipInitializeWithVersion: false,
-		}), glog)
-		if err != nil {
-			if isMySQLUnknownDatabaseErr(err) {
-				if err2 := ensureMySQLDatabase(c, glog); err2 != nil {
-					return nil, nil, err2
-				}
-				db, err = gorm.Open(mysql.New(mysql.Config{
-					DSN:                       dsn,
-					DefaultStringSize:         256,
-					DisableDatetimePrecision:  true,
-					DontSupportRenameIndex:    true,
-					DontSupportRenameColumn:   true,
-					SkipInitializeWithVersion: false,
-				}), glog)
-			}
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-	case "pg", "postgres":
-		sslmode := c.SSLMode
-		if sslmode == "" {
-			sslmode = "disable"
-		}
-		tz := c.TimeZone
-		if strings.TrimSpace(tz) == "" {
-			tz = systemTimeZoneName()
-		}
-		if strings.EqualFold(tz, "local") {
-			tz = systemTimeZoneName()
-		}
-
-		host := c.Address
-		port := "5432"
-		if strings.Contains(c.Address, ":") {
-			parts := strings.Split(c.Address, ":")
-			if len(parts) >= 2 {
-				host = parts[0]
-				if parts[1] != "" {
-					port = parts[1]
-				}
-			}
-		}
-
-		dsn := buildPGDsn(host, port, c.Username, c.Password, c.DBName, sslmode, tz)
-		db, err = gorm.Open(postgres.Open(dsn), glog)
-		if err != nil {
-			if isPGDatabaseDoesNotExistErr(err) {
-				if err2 := ensurePGDatabase(c, glog, host, port, sslmode, tz); err2 != nil {
-					return nil, nil, err2
-				}
-				db, err = gorm.Open(postgres.Open(dsn), glog)
-			}
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-	default:
-		db, err = gorm.Open(sqlite.Open(c.DBPath), glog)
+	db, err := openGormDB(&cfg, glog)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	sqlDB, err := db.DB()
@@ -294,29 +375,16 @@ func NewGorm(c *GormConfig, log *slog.Logger) (*gorm.DB, func(), error) {
 	}
 
 	if err := sqlDB.Ping(); err != nil {
-		log.Error(fmt.Sprintf("DB:%v PING错误,%v", c.DBName, err))
+		log.Error(fmt.Sprintf("DB:%v PING错误,%v", cfg.DBName, err))
 		return nil, nil, err
-	} else {
-		switch c.Type {
-		case "mysql":
-			log.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName)))
-		case "pg", "postgres":
-			log.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName)))
-		default:
-			log.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath)))
-		}
 	}
+	logDBConnected(log, &cfg)
 
-	// SetMaxIdleConns 用于设置连接池中空闲连接的最大数量。
-	sqlDB.SetMaxIdleConns(c.Conns.Maxidle)
-	// SetMaxOpenConns 设置打开数据库连接的最大数量。
-	sqlDB.SetMaxOpenConns(c.Conns.Maxopen)
-	// SetConnMaxLifetime 设置了连接可复用的最大时间。
-	sqlDB.SetConnMaxLifetime(time.Second * time.Duration(c.Conns.Maxlifetime))
+	applyConnPool(sqlDB, cfg.Conns)
 	theF := func() {
-		log.Info(fmt.Sprintf("DB 连接池关闭-%v", c.DBName))
+		log.Info(fmt.Sprintf("DB 连接池关闭-%v", cfg.DBName))
 		if err := sqlDB.Close(); err != nil {
-			log.Error(fmt.Sprintf("DB 连接池关闭失败-%v", c.DBName))
+			log.Error(fmt.Sprintf("DB 连接池关闭失败-%v", cfg.DBName))
 		}
 	}
 	return db, theF, nil
