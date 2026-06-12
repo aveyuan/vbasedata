@@ -41,7 +41,7 @@ func (s *LruCache) Incr(id string) error {
 			s.lru.Add(id, "1")
 			return nil
 		}
-		s.lru.Add(id, strconv.Itoa(i))
+		s.lru.Add(id, strconv.Itoa(i+1))
 		return nil
 	}
 	s.lru.Add(id, "1")

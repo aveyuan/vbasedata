@@ -3,18 +3,15 @@ package vbasedata
 import (
 	"context"
 	"image/color"
-	"time"
 
 	"github.com/aveyuan/base64Captcha"
 )
 
 type CaptchaConfig struct {
-	Width      int           `json:"width" yaml:"width"`
-	Height     int           `json:"height" yaml:"height"`
-	Fonts      []string      `json:"fonts" yaml:"fonts"`
-	BgColor    *color.RGBA   `json:"bg_color" yaml:"bg_color"`
-	StorageLen int           `json:"storage_len" yaml:"storage_len"`
-	StroageExp time.Duration `json:"stroage_exp" yaml:"stroage_exp"`
+	Width   int         `json:"width" yaml:"width"`
+	Height  int         `json:"height" yaml:"height"`
+	Fonts   []string    `json:"fonts" yaml:"fonts"`
+	BgColor *color.RGBA `json:"bg_color" yaml:"bg_color"`
 }
 
 type Captcha struct {
@@ -38,17 +35,10 @@ func NewCaptcha(c *CaptchaConfig, stor base64Captcha.Store) *Captcha {
 	if c.BgColor == nil {
 		c.BgColor = &color.RGBA{
 			R: 255,
-			B: 255,
 			G: 255,
+			B: 255,
+			A: 255,
 		}
-	}
-
-	if c.StorageLen == 0 {
-		c.StorageLen = 5000
-	}
-
-	if c.StroageExp == 0 {
-		c.StroageExp = 6 * time.Minute
 	}
 
 	dv := &base64Captcha.DriverMath{
@@ -73,4 +63,3 @@ func (r *Captcha) GetCaptCha(ctx context.Context) (id, b64s, answer string, err 
 func (r *Captcha) Verify(ctx context.Context, id, VerifyValue string) (b bool) {
 	return r.stor.Verify(id, VerifyValue, true)
 }
-

@@ -43,7 +43,7 @@ func NewRedis(c *RedisConfig, logger *slog.Logger) (redis.UniversalClient, func(
 		MasterName:       c.MasterName,
 		SentinelUsername: c.SentinelUsername,
 		SentinelPassword: c.SentinelPassword,
-		ConnMaxIdleTime:  time.Duration(c.WriteTimeout) * time.Second,
+		ConnMaxIdleTime:  time.Duration(c.MaxIdleTime) * time.Second,
 	})
 	pong, err := rdb.Ping(context.Background()).Result()
 	if err != nil {

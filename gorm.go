@@ -39,6 +39,20 @@ func systemTimeZoneName() string {
 	return "UTC"
 }
 
+// parseLogLevel 将配置中的字符串日志级别转换为 gorm logger.LogLevel，默认 Warn。
+func parseLogLevel(level string) glogger.LogLevel {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "silent":
+		return glogger.Silent
+	case "error":
+		return glogger.Error
+	case "info":
+		return glogger.Info
+	default:
+		return glogger.Warn
+	}
+}
+
 func isMySQLUnknownDatabaseErr(err error) bool {
 	var mysqlErr *mysqldriver.MySQLError
 	if errors.As(err, &mysqlErr) {
@@ -187,10 +201,11 @@ func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 
 	glog := &gorm.Config{
 		Logger: logger.NewSlogLogger(slog, glogger.Config{
-			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold),
+			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold) * time.Millisecond,
 			Colorful:                  c.Logconfig.Colorful,
 			IgnoreRecordNotFoundError: c.Logconfig.IgnoreRecordNotFoundError,
 			ParameterizedQueries:      c.Logconfig.ParameterizedQueries,
+			LogLevel:                  parseLogLevel(c.Logconfig.Level),
 		}),
 	}
 
@@ -279,11 +294,11 @@ func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 	} else {
 		switch c.Type {
 		case "mysql":
-			slog.Error(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName)))
+			slog.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName)))
 		case "pg", "postgres":
-			slog.Error(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName)))
+			slog.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName)))
 		default:
-			slog.Error(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath)))
+			slog.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath)))
 		}
 	}
 
