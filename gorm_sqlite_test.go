@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type sqliteGormTestUser struct {
+type gormSQLiteTestUser struct {
 	ID        uint `gorm:"primaryKey"`
 	Name      string
 	Email     string `gorm:"uniqueIndex"`
@@ -28,11 +28,11 @@ func TestNewGorm_SQLite(t *testing.T) {
 	}
 	defer closeFn()
 
-	if err := db.AutoMigrate(&sqliteGormTestUser{}); err != nil {
+	if err := db.AutoMigrate(&gormSQLiteTestUser{}); err != nil {
 		t.Fatalf("auto migrate sqlite test user: %v", err)
 	}
 
-	user := sqliteGormTestUser{
+	user := gormSQLiteTestUser{
 		Name:  "SQLite User",
 		Email: "sqlite-user@example.com",
 	}
@@ -43,7 +43,7 @@ func TestNewGorm_SQLite(t *testing.T) {
 		t.Fatal("expected sqlite test user ID to be set")
 	}
 
-	var got sqliteGormTestUser
+	var got gormSQLiteTestUser
 	if err := db.Where("email = ?", user.Email).First(&got).Error; err != nil {
 		t.Fatalf("query sqlite test user: %v", err)
 	}

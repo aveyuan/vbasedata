@@ -1,8 +1,8 @@
 package vbasedata
 
 import (
-	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/wneessen/go-mail"
 )
@@ -69,10 +69,14 @@ func (t *Email) SendMsg(msg *Msg) error {
 		mail.WithUsername(t.c.Username),
 		mail.WithPassword(t.c.Password),
 	}
+	// go-mail 的 NewClient 第一个参数只接受主机名，端口需通过 WithPort 单独设置。
+	if port, perr := strconv.Atoi(t.c.Port); perr == nil && port > 0 {
+		opts = append(opts, mail.WithPort(port))
+	}
 	if t.c.Tls {
 		opts = append(opts, mail.WithSSL())
 	}
-	client, err := mail.NewClient(fmt.Sprintf("%v:%v", t.c.Host, t.c.Port), opts...)
+	client, err := mail.NewClient(t.c.Host, opts...)
 	if err != nil {
 		t.slog.Error("failed to create mail client", "error", err)
 		return err
