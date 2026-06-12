@@ -19,8 +19,8 @@ type EmailConfig struct {
 type BodyType string
 
 const (
-	TextBodyType = "text"
-	HtmlBodyType = "html"
+	TextBodyType BodyType = "text"
+	HtmlBodyType BodyType = "html"
 )
 
 type Email struct {
@@ -42,7 +42,7 @@ type Msg struct {
 	Title    string
 	Body     string
 	To       string
-	BodyType BodyType // 1 text 2 html
+	BodyType BodyType // TextBodyType 或 HtmlBodyType，默认按纯文本发送
 }
 
 func (t *Email) SendMsg(msg *Msg) error {

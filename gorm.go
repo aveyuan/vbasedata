@@ -78,7 +78,7 @@ func quotePGIdent(s string) string {
 }
 
 func ensureMySQLDatabase(c *GormConfig, glog *gorm.Config) error {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/?charset=utf8&parseTime=True&loc=Local", c.Username, c.Password, c.Address)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/?charset=utf8mb4&parseTime=True&loc=Local", c.Username, c.Password, c.Address)
 	adminDB, err := gorm.Open(mysql.New(mysql.Config{DSN: dsn}), glog)
 	if err != nil {
 		return err
@@ -163,9 +163,12 @@ type Conns struct {
 }
 
 // NewGorm 初始化一个gorm的客户端
-func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
+func NewGorm(c *GormConfig, log *slog.Logger) (*gorm.DB, func(), error) {
 	if c == nil {
 		return nil, nil, errors.New("GORM配置参数不能为空")
+	}
+	if log == nil {
+		log = slog.Default()
 	}
 	//默认配置
 	if c.Logconfig == nil {
@@ -200,7 +203,7 @@ func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 	}
 
 	glog := &gorm.Config{
-		Logger: logger.NewSlogLogger(slog, glogger.Config{
+		Logger: logger.NewSlogLogger(log, glogger.Config{
 			SlowThreshold:             time.Duration(c.Logconfig.SlowThreshold) * time.Millisecond,
 			Colorful:                  c.Logconfig.Colorful,
 			IgnoreRecordNotFoundError: c.Logconfig.IgnoreRecordNotFoundError,
@@ -214,7 +217,7 @@ func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 
 	switch c.Type {
 	case "mysql":
-		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", c.Username, c.Password, c.Address, c.DBName)
+		dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", c.Username, c.Password, c.Address, c.DBName)
 		db, err = gorm.Open(mysql.New(mysql.Config{
 			DSN:                       dsn,
 			DefaultStringSize:         256,
@@ -289,16 +292,16 @@ func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 	}
 
 	if err := sqlDB.Ping(); err != nil {
-		slog.Error(fmt.Sprintf("DB:%v PING错误,%v", c.DBName, err))
+		log.Error(fmt.Sprintf("DB:%v PING错误,%v", c.DBName, err))
 		return nil, nil, err
 	} else {
 		switch c.Type {
 		case "mysql":
-			slog.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName)))
+			log.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local 连接成功", c.Username, c.Address, c.DBName)))
 		case "pg", "postgres":
-			slog.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName)))
+			log.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:******@%s/%s 连接成功", c.Username, c.Address, c.DBName)))
 		default:
-			slog.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath)))
+			log.Info(fmt.Sprintf("数据库配置:%v", fmt.Sprintf("%s:连接成功", c.DBPath)))
 		}
 	}
 
@@ -309,9 +312,9 @@ func NewGorm(c *GormConfig, slog *slog.Logger) (*gorm.DB, func(), error) {
 	// SetConnMaxLifetime 设置了连接可复用的最大时间。
 	sqlDB.SetConnMaxLifetime(time.Second * time.Duration(c.Conns.Maxlifetime))
 	theF := func() {
-		slog.Info(fmt.Sprintf("DB 连接池关闭-%v", c.DBName))
+		log.Info(fmt.Sprintf("DB 连接池关闭-%v", c.DBName))
 		if err := sqlDB.Close(); err != nil {
-			slog.Error(fmt.Sprintf("DB 连接池关闭失败-%v", c.DBName))
+			log.Error(fmt.Sprintf("DB 连接池关闭失败-%v", c.DBName))
 		}
 	}
 	return db, theF, nil

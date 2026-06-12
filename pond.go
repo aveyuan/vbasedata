@@ -21,12 +21,21 @@ type Pond struct {
 }
 
 func NewPond(c *PondConfig, log *slog.Logger) *Pond {
+	if log == nil {
+		log = slog.Default()
+	}
+
 	if c.MinWorkers == 0 {
 		c.MinWorkers = 2
 	}
 
 	if c.MaxWorkers == 0 {
 		c.MaxWorkers = 10
+	}
+
+	// MinWorkers 不能超过 MaxWorkers，否则 pond.New 会 panic。
+	if c.MinWorkers > c.MaxWorkers {
+		c.MinWorkers = c.MaxWorkers
 	}
 
 	if c.StopAndWait == 0 {

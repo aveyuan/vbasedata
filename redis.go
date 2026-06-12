@@ -29,9 +29,12 @@ func NewRedis(c *RedisConfig, logger *slog.Logger) (redis.UniversalClient, func(
 	if c == nil {
 		return nil, nil, errors.New("redis配置参数不能为空")
 	}
+	if logger == nil {
+		logger = slog.Default()
+	}
 
 	logger.Info(fmt.Sprintf("redis配置%+v", c.Addr))
-	//逗号分割，兼容单点和集群两种模式。
+	// UniversalClient 根据 Addr 数量与 MasterName 自动适配单点/集群/哨兵模式。
 	rdb := redis.NewUniversalClient(&redis.UniversalOptions{
 		PoolSize:         c.PoolSize, //连接池最大
 		MaxIdleConns:     c.MaxIdle,
