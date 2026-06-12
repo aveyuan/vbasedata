@@ -39,17 +39,19 @@ func systemTimeZoneName() string {
 	return "UTC"
 }
 
-// parseLogLevel 将配置中的字符串日志级别转换为 gorm logger.LogLevel，默认 Warn。
+// parseLogLevel 将配置中的字符串日志级别转换为 gorm logger.LogLevel，默认 info
 func parseLogLevel(level string) glogger.LogLevel {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "silent":
 		return glogger.Silent
+	case "warn":
+		return glogger.Warn
 	case "error":
 		return glogger.Error
-	case "info":
+	case "info", "debug":
 		return glogger.Info
 	default:
-		return glogger.Warn
+		return glogger.Info
 	}
 }
 
