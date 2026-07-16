@@ -10,14 +10,12 @@ func TestLruCache_SetGet(t *testing.T) {
 	if err := c.Set("k", "v"); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
-	// Get without clear keeps the entry.
 	if got := c.Get("k", false); got != "v" {
 		t.Errorf("Get = %q, want v", got)
 	}
 	if got := c.Get("k", false); got != "v" {
 		t.Errorf("second Get = %q, want v (should not be cleared)", got)
 	}
-	// Get with clear removes it.
 	if got := c.Get("k", true); got != "v" {
 		t.Errorf("Get(clear) = %q, want v", got)
 	}
@@ -31,22 +29,17 @@ func TestLruCache_SetGet(t *testing.T) {
 
 func TestLruCache_Incr(t *testing.T) {
 	c := NewLruCache(10, time.Minute)
-
-	// First Incr on a missing key initializes to "1".
 	if err := c.Incr("n"); err != nil {
 		t.Fatalf("Incr: %v", err)
 	}
 	if got := c.Get("n", false); got != "1" {
 		t.Fatalf("after 1st Incr = %q, want 1", got)
 	}
-	// Subsequent Incr actually increments.
 	_ = c.Incr("n")
 	_ = c.Incr("n")
 	if got := c.Get("n", false); got != "3" {
 		t.Fatalf("after 3 Incr = %q, want 3", got)
 	}
-
-	// Incr on a non-numeric existing value resets to "1".
 	_ = c.Set("bad", "abc")
 	if err := c.Incr("bad"); err != nil {
 		t.Fatalf("Incr(bad): %v", err)
@@ -59,15 +52,12 @@ func TestLruCache_Incr(t *testing.T) {
 func TestLruCache_Verify(t *testing.T) {
 	c := NewLruCache(10, time.Minute)
 	_ = c.Set("id", "answer")
-
 	if c.Verify("id", "wrong", false) {
 		t.Error("Verify with wrong answer should be false")
 	}
-	// Wrong answer with clear=false must not consume the entry.
 	if !c.Verify("id", "answer", false) {
 		t.Error("Verify with correct answer should be true")
 	}
-	// Correct answer with clear=true consumes the entry.
 	if !c.Verify("id", "answer", true) {
 		t.Error("Verify(clear) with correct answer should be true")
 	}
@@ -89,7 +79,6 @@ func TestLruCache_Expiry(t *testing.T) {
 }
 
 func TestLruCache_Eviction(t *testing.T) {
-	// Capacity of 1: adding a second key evicts the first.
 	c := NewLruCache(1, time.Minute)
 	_ = c.Set("a", "1")
 	_ = c.Set("b", "2")
@@ -98,5 +87,30 @@ func TestLruCache_Eviction(t *testing.T) {
 	}
 	if got := c.Get("b", false); got != "2" {
 		t.Errorf("expected 'b' to remain, got %q", got)
+	}
+}
+
+func TestLruCache_VerifyConsumesAtomically(t *testing.T) {
+	c := NewLruCache(10, time.Minute)
+	if err := c.Set("id", "answer"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	const callers = 100
+	results := make(chan bool, callers)
+	for range callers {
+		go func() {
+			results <- c.Verify("id", "answer", true)
+		}()
+	}
+
+	successes := 0
+	for range callers {
+		if <-results {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful verifications = %d, want 1", successes)
 	}
 }

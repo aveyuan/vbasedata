@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	redis "github.com/redis/go-redis/v9"
@@ -29,14 +30,21 @@ func NewRedis(c *RedisConfig, logger *slog.Logger) (redis.UniversalClient, func(
 	if c == nil {
 		return nil, nil, errors.New("redis配置参数不能为空")
 	}
+	if len(c.Addr) == 0 {
+		return nil, nil, errors.New("redis地址不能为空")
+	}
+	for _, addr := range c.Addr {
+		if strings.TrimSpace(addr) == "" {
+			return nil, nil, errors.New("redis地址不能为空")
+		}
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	logger.Info(fmt.Sprintf("redis配置%+v", c.Addr))
-	// UniversalClient 根据 Addr 数量与 MasterName 自动适配单点/集群/哨兵模式。
+	logger.Info("初始化 Redis 客户端", "addresses", c.Addr)
 	rdb := redis.NewUniversalClient(&redis.UniversalOptions{
-		PoolSize:         c.PoolSize, //连接池最大
+		PoolSize:         c.PoolSize,
 		MaxIdleConns:     c.MaxIdle,
 		Addrs:            c.Addr,
 		Password:         c.Auth,
@@ -48,16 +56,21 @@ func NewRedis(c *RedisConfig, logger *slog.Logger) (redis.UniversalClient, func(
 		SentinelPassword: c.SentinelPassword,
 		ConnMaxIdleTime:  time.Duration(c.MaxIdleTime) * time.Second,
 	})
-	pong, err := rdb.Ping(context.Background()).Result()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pong, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		return nil, nil, err
+		_ = rdb.Close()
+		return nil, nil, fmt.Errorf("ping redis: %w", err)
 	}
-	logger.Info(fmt.Sprintf("redis ping 情况：%v", pong))
-	f := func() {
+	logger.Info("Redis ping 成功", "result", pong)
+
+	closeFn := func() {
 		logger.Info("Redis 连接池关闭")
 		if err := rdb.Close(); err != nil {
-			logger.Error(fmt.Sprintf("Redis 连接池关闭失败 %v", err))
+			logger.Error("Redis 连接池关闭失败", "error", err)
 		}
 	}
-	return rdb, f, nil
+	return rdb, closeFn, nil
 }

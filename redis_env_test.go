@@ -10,6 +10,7 @@ import (
 )
 
 func TestNewRedis_LocalEnv(t *testing.T) {
+	requireIntegration(t)
 	addr, usingDefault := testEnvDefault("VB_TEST_REDIS_ADDR", "127.0.0.1:6379")
 	auth := os.Getenv("VB_TEST_REDIS_AUTH")
 	db := testEnvIntDefault("VB_TEST_REDIS_DB", 0)

@@ -10,7 +10,7 @@ import (
 
 type LruCache struct {
 	lru *expirable.LRU[string, string]
-	mu  sync.Mutex // 保护 Incr 的读-改-写复合操作
+	mu  sync.Mutex // 保护多步缓存操作的原子性
 }
 
 func NewLruCache(size int, exp time.Duration) *LruCache {
@@ -19,46 +19,57 @@ func NewLruCache(size int, exp time.Duration) *LruCache {
 	}
 }
 
-func (s *LruCache) Set(id string, value string) error {
-	s.lru.Add(id, value)
+func (c *LruCache) Set(id string, value string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.lru.Add(id, value)
 	return nil
 }
 
-func (s *LruCache) Get(id string, clear bool) string {
-	v, ok := s.lru.Get(id)
-	if ok {
-		if clear {
-			s.lru.Remove(id)
-		}
-		return v
+func (c *LruCache) Get(id string, clear bool) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	value, ok := c.lru.Get(id)
+	if !ok {
+		return ""
 	}
-	return ""
+	if clear {
+		c.lru.Remove(id)
+	}
+	return value
 }
 
-func (s *LruCache) Incr(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	v, ok := s.lru.Get(id)
-	if ok {
-		i, err := strconv.Atoi(v)
-		if err != nil {
-			s.lru.Add(id, "1")
-			return nil
-		}
-		s.lru.Add(id, strconv.Itoa(i+1))
+func (c *LruCache) Incr(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	value, ok := c.lru.Get(id)
+	if !ok {
+		c.lru.Add(id, "1")
 		return nil
 	}
-	s.lru.Add(id, "1")
+
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		c.lru.Add(id, "1")
+		return nil
+	}
+	c.lru.Add(id, strconv.Itoa(number+1))
 	return nil
 }
 
-func (s *LruCache) Verify(id, answer string, clear bool) bool {
-	v, ok := s.lru.Get(id)
-	if ok {
-		if clear {
-			s.lru.Remove(id)
-		}
-		return v == answer
+func (c *LruCache) Verify(id, answer string, clear bool) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	value, ok := c.lru.Get(id)
+	if !ok {
+		return false
 	}
-	return false
+	if clear {
+		c.lru.Remove(id)
+	}
+	return value == answer
 }

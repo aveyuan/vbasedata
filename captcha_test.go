@@ -1,7 +1,6 @@
 package vbasedata
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -26,40 +25,40 @@ func TestNewCaptcha_Defaults(t *testing.T) {
 }
 
 func TestCaptcha_GenerateAndVerify(t *testing.T) {
-	c := NewCaptcha(&CaptchaConfig{}, NewLruCache(10, time.Minute))
-	ctx := context.Background()
+	store := NewLruCache(10, time.Minute)
+	captcha := NewCaptcha(&CaptchaConfig{}, store)
 
-	id, b64s, answer, err := c.GetCaptCha(ctx)
+	id, image, err := captcha.Generate()
 	if err != nil {
-		t.Fatalf("GetCaptCha: %v", err)
+		t.Fatalf("Generate: %v", err)
 	}
-	if id == "" || answer == "" {
-		t.Fatalf("empty id (%q) or answer (%q)", id, answer)
+	if id == "" {
+		t.Fatal("empty captcha id")
 	}
-	if !strings.HasPrefix(b64s, "data:image") {
-		t.Errorf("b64s does not look like a data URI: %.20q", b64s)
+	if !strings.HasPrefix(image, "data:image") {
+		t.Errorf("image does not look like a data URI: %.20q", image)
 	}
-
-	// Wrong answer fails.
-	if c.Verify(ctx, id, answer+"_wrong") {
+	if captcha.Verify(id, "wrong") {
 		t.Error("Verify should fail for a wrong answer")
 	}
 }
 
 func TestCaptcha_VerifyConsumes(t *testing.T) {
-	c := NewCaptcha(&CaptchaConfig{}, NewLruCache(10, time.Minute))
-	ctx := context.Background()
+	store := NewLruCache(10, time.Minute)
+	captcha := NewCaptcha(&CaptchaConfig{}, store)
 
-	id, _, answer, err := c.GetCaptCha(ctx)
+	id, _, err := captcha.Generate()
 	if err != nil {
-		t.Fatalf("GetCaptCha: %v", err)
+		t.Fatalf("Generate: %v", err)
 	}
-
-	if !c.Verify(ctx, id, answer) {
+	answer := store.Get(id, false)
+	if answer == "" {
+		t.Fatal("captcha answer was not stored")
+	}
+	if !captcha.Verify(id, answer) {
 		t.Fatal("Verify should succeed for the correct answer")
 	}
-	// The store clears on verify, so a second attempt must fail.
-	if c.Verify(ctx, id, answer) {
+	if captcha.Verify(id, answer) {
 		t.Error("second Verify should fail (answer already consumed)")
 	}
 }

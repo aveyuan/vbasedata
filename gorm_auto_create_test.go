@@ -16,6 +16,7 @@ import (
 // 优先使用 VB_TEST_MYSQL_* 环境变量；未设置时回退到默认测试凭据，
 // 若默认凭据连不上则跳过（视为本地无 MySQL），显式配置了凭据才判定失败。
 func TestNewGorm_MySQL_AutoCreateDatabase(t *testing.T) {
+	requireIntegration(t)
 	addr, d1 := testEnvDefault("VB_TEST_MYSQL_ADDR", "127.0.0.1:3306")
 	user, d2 := testEnvDefault("VB_TEST_MYSQL_USER", "root")
 	pass, d3 := testEnvDefault("VB_TEST_MYSQL_PASS", "123456")
@@ -58,6 +59,7 @@ func TestNewGorm_MySQL_AutoCreateDatabase(t *testing.T) {
 
 // TestNewGorm_PG_AutoCreateDatabase 验证 PostgreSQL 下的自动建库逻辑。
 func TestNewGorm_PG_AutoCreateDatabase(t *testing.T) {
+	requireIntegration(t)
 	addr, d1 := testEnvDefault("VB_TEST_PG_ADDR", "127.0.0.1:5432")
 	user, d2 := testEnvDefault("VB_TEST_PG_USER", "postgres")
 	pass, d3 := testEnvDefault("VB_TEST_PG_PASS", "123456")

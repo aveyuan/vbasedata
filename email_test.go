@@ -20,6 +20,7 @@ import (
 //	VB_TEST_SMTP_PASS  认证密码（可选）
 //	VB_TEST_SMTP_TLS   置为 1/true 时启用隐式 SSL/TLS（可选）
 func TestEmail_SendMsg(t *testing.T) {
+	requireIntegration(t)
 	host, d1 := testEnvDefault("VB_TEST_SMTP_HOST", "127.0.0.1")
 	port, d2 := testEnvDefault("VB_TEST_SMTP_PORT", "25")
 	from, d3 := testEnvDefault("VB_TEST_SMTP_FROM", "test@example.com")

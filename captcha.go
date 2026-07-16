@@ -1,7 +1,6 @@
 package vbasedata
 
 import (
-	"context"
 	"image/color"
 
 	"github.com/aveyuan/base64Captcha"
@@ -33,33 +32,30 @@ func NewCaptcha(c *CaptchaConfig, stor base64Captcha.Store) *Captcha {
 	}
 
 	if c.BgColor == nil {
-		c.BgColor = &color.RGBA{
-			R: 255,
-			G: 255,
-			B: 255,
-			A: 255,
-		}
+		c.BgColor = &color.RGBA{R: 255, G: 255, B: 255, A: 255}
 	}
 
-	dv := &base64Captcha.DriverMath{
+	driver := (&base64Captcha.DriverMath{
 		Width:   c.Width,
 		Height:  c.Height,
 		Fonts:   c.Fonts,
 		BgColor: c.BgColor,
-	}
-	dv = dv.ConvertFonts()
+	}).ConvertFonts()
 
-	// 实例化
 	return &Captcha{
 		stor:    stor,
-		captcha: base64Captcha.NewCaptcha(dv, stor),
+		captcha: base64Captcha.NewCaptcha(driver, stor),
 	}
 }
 
-func (r *Captcha) GetCaptCha(ctx context.Context) (id, b64s, answer string, err error) {
-	return r.captcha.Generate()
+// Generate creates a captcha image and stores its answer. The answer is never
+// returned to callers, preventing accidental disclosure in an API response.
+func (c *Captcha) Generate() (id, image string, err error) {
+	id, image, _, err = c.captcha.Generate()
+	return id, image, err
 }
 
-func (r *Captcha) Verify(ctx context.Context, id, VerifyValue string) (b bool) {
-	return r.stor.Verify(id, VerifyValue, true)
+// Verify validates and consumes a captcha answer.
+func (c *Captcha) Verify(id, value string) bool {
+	return c.stor.Verify(id, value, true)
 }

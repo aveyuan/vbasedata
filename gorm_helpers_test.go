@@ -15,10 +15,10 @@ import (
 
 func TestQuoteMySQLIdent(t *testing.T) {
 	cases := map[string]string{
-		"db":      "`db`",
-		"my`db":   "`my``db`",
-		"a`b`c":   "`a``b``c`",
-		"":        "``",
+		"db":    "`db`",
+		"my`db": "`my``db`",
+		"a`b`c": "`a``b``c`",
+		"":      "``",
 	}
 	for in, want := range cases {
 		if got := quoteMySQLIdent(in); got != want {
@@ -29,10 +29,10 @@ func TestQuoteMySQLIdent(t *testing.T) {
 
 func TestQuotePGIdent(t *testing.T) {
 	cases := map[string]string{
-		"db":      `"db"`,
-		`my"db`:   `"my""db"`,
-		`a"b"c`:   `"a""b""c"`,
-		"":        `""`,
+		"db":    `"db"`,
+		`my"db`: `"my""db"`,
+		`a"b"c`: `"a""b""c"`,
+		"":      `""`,
 	}
 	for in, want := range cases {
 		if got := quotePGIdent(in); got != want {
@@ -165,5 +165,19 @@ func TestNewGorm_Defaults(t *testing.T) {
 func TestNewGorm_NilConfig(t *testing.T) {
 	if _, _, err := NewGorm(nil, slog.Default()); err == nil {
 		t.Error("expected error for nil config")
+	}
+}
+
+func TestNewGorm_RejectsInvalidConfig(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cases := []GormConfig{
+		{Type: "mysql"},
+		{Type: "postgres", Address: "127.0.0.1:5432"},
+		{Type: "unknown"},
+	}
+	for _, cfg := range cases {
+		if _, _, err := NewGorm(&cfg, log); err == nil {
+			t.Errorf("NewGorm(%+v) returned nil error", cfg)
+		}
 	}
 }

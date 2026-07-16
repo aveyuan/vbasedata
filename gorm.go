@@ -270,6 +270,26 @@ func normalizeGormConfig(c *GormConfig) GormConfig {
 	return cfg
 }
 
+func validateGormConfig(c *GormConfig) error {
+	switch c.Type {
+	case "", "sqlite":
+		return nil
+	case "mysql", "pg", "postgres":
+		if strings.TrimSpace(c.Address) == "" {
+			return errors.New("数据库地址不能为空")
+		}
+		if strings.TrimSpace(c.Username) == "" {
+			return errors.New("数据库用户名不能为空")
+		}
+		if strings.TrimSpace(c.DBName) == "" {
+			return errors.New("数据库名称不能为空")
+		}
+		return nil
+	default:
+		return fmt.Errorf("不支持的数据库类型: %s", c.Type)
+	}
+}
+
 func applyNormalizedGormConfig(dst *GormConfig, src *GormConfig) {
 	dst.Type = src.Type
 	dst.DBPath = src.DBPath
@@ -325,8 +345,10 @@ func openGormDB(c *GormConfig, glog *gorm.Config) (*gorm.DB, error) {
 			}
 		}
 		return db, nil
-	default:
+	case "", "sqlite":
 		return gorm.Open(sqlite.Open(c.DBPath), glog)
+	default:
+		return nil, fmt.Errorf("不支持的数据库类型: %s", c.Type)
 	}
 }
 
@@ -359,9 +381,11 @@ func NewGorm(c *GormConfig, log *slog.Logger) (*gorm.DB, func(), error) {
 	if log == nil {
 		log = slog.Default()
 	}
-
 	cfg := normalizeGormConfig(c)
 	applyNormalizedGormConfig(c, &cfg)
+	if err := validateGormConfig(&cfg); err != nil {
+		return nil, nil, err
+	}
 	glog := newGormConfig(&cfg, log)
 
 	db, err := openGormDB(&cfg, glog)
@@ -373,9 +397,9 @@ func NewGorm(c *GormConfig, log *slog.Logger) (*gorm.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 	if err := sqlDB.Ping(); err != nil {
-		log.Error(fmt.Sprintf("DB:%v PING错误,%v", cfg.DBName, err))
+		_ = sqlDB.Close()
+		log.Error("数据库 Ping 失败", "database", cfg.DBName, "error", err)
 		return nil, nil, err
 	}
 	logDBConnected(log, &cfg)
