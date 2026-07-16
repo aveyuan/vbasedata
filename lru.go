@@ -8,6 +8,8 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
+var _ Cache = (*LruCache)(nil)
+
 type LruCache struct {
 	lru *expirable.LRU[string, string]
 	mu  sync.Mutex // 保护多步缓存操作的原子性
