@@ -71,6 +71,17 @@ func TestBuildPGDsn(t *testing.T) {
 	})
 }
 
+func TestBuildMySQLDSNAllowsNativePasswords(t *testing.T) {
+	got := buildMySQLDSN(&GormConfig{
+		Username: "user",
+		Password: "pass",
+		Address:  "127.0.0.1:3306",
+	}, "db")
+	if !strings.Contains(got, "allowNativePasswords=1") {
+		t.Fatalf("buildMySQLDSN() = %q, missing native password option", got)
+	}
+}
+
 func TestParseLogLevel(t *testing.T) {
 	cases := map[string]glogger.LogLevel{
 		"silent": glogger.Silent,

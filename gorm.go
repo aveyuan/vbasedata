@@ -82,15 +82,17 @@ func quotePGIdent(s string) string {
 
 func buildMySQLDSN(c *GormConfig, dbName string) string {
 	return (&mysqldriver.Config{
-		User:      c.Username,
-		Passwd:    c.Password,
-		Net:       "tcp",
-		Addr:      c.Address,
-		DBName:    dbName,
-		ParseTime: true,
-		Loc:       time.Local,
+		User:                 c.Username,
+		Passwd:               c.Password,
+		Net:                  "tcp",
+		Addr:                 c.Address,
+		DBName:               dbName,
+		ParseTime:            true,
+		Loc:                  time.Local,
+		AllowNativePasswords: true,
 		Params: map[string]string{
-			"charset": "utf8mb4",
+			"allowNativePasswords": "1",
+			"charset":              "utf8mb4",
 		},
 	}).FormatDSN()
 }
